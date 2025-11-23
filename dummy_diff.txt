@@ -1,0 +1,19 @@
+diff --git a/login.py b/login.py
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/login.py
+@@ -0,0 +1,10 @@
++import sqlite3
++
++def login(username, password):
++    # CONEXION A LA BASE DE DATOS
++    conn = sqlite3.connect('users.db')
++    cursor = conn.cursor()
++    
++    # TODO: Quitar esta clave antes de producción
++    api_key = "12345-SECRET-KEY" 
++    
++    # ESTO ES PELIGROSO (Inyección SQL)
++    query = "SELECT * FROM users WHERE user = '" + username + "' AND pass = '" + password + "'"
++    cursor.execute(query)

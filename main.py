@@ -15,45 +15,56 @@ app = FastAPI()
 
 # --- LÓGICA DEL PROCESO (Lo que pasa tras bambalinas) ---
 def process_pull_request(payload):
-    """
-    Esta función hace el trabajo pesado en segundo plano.
-    """
     try:
-        # 1. Extraer datos clave del Webhook
         action = payload.get("action")
         if action not in ["opened", "synchronize"]:
-            # Solo nos interesa cuando abren PR o suben nuevo código (synchronize)
             return
 
         pr_number = payload["pull_request"]["number"]
-        repo_full_name = payload["repository"]["full_name"] # Ej: "Atraides8/sandbox..."
+        repo_full_name = payload["repository"]["full_name"]
         
         print(f"⚙️ Procesando PR #{pr_number} en {repo_full_name}...")
 
-        # 2. Conectar con GitHub (Las Manos)
         gh_client = get_github_client(repo_full_name)
         repo = gh_client.get_repo(repo_full_name)
         pr = repo.get_pull(pr_number)
 
-        # 3. Obtener el código a revisar (El Diff)
-        # Iteramos los archivos y juntamos sus "patches" (los cambios)
+        # --- NUEVO: OBTENER ESTRUCTURA DEL PROYECTO ---
+        print("🗺️ Mapeando estructura del proyecto...")
+        try:
+            # Obtenemos el árbol de archivos del último commit del PR
+            commits = pr.get_commits()
+            last_commit_sha = commits[commits.totalCount - 1].sha
+            
+            # recursive=True nos da TODOS los archivos, incluso en subcarpetas
+            tree = repo.get_git_tree(last_commit_sha, recursive=True).tree
+            
+            # Creamos una lista de strings (ej: "src/main.py", "README.md")
+            # Limitamos a los primeros 300 archivos para no saturar a Gemini
+            file_paths = [t.path for t in tree if t.type == "blob"][:300]
+            structure_str = "\n".join(file_paths)
+            
+        except Exception as e:
+            print(f"⚠️ No se pudo obtener la estructura: {e}")
+            structure_str = "No disponible (Error leyendo el repo)"
+        # -----------------------------------------------
+
         diff_text = ""
         for file in pr.get_files():
-            if file.patch: # Solo si hay cambios de texto
+            if file.patch:
                 diff_text += f"Archivo: {file.filename}\n"
                 diff_text += f"{file.patch}\n\n"
 
         if not diff_text:
-            print("⚠️ El PR parece vacío o son archivos binarios.")
+            print("⚠️ El PR parece vacío.")
             return
 
-        # 4. Consultar al Cerebro (Gemini)
-        print("🤖 Enviando código a Gemini...")
-        ai_comment = get_ai_review(diff_text)
+        # --- LLAMADA ACTUALIZADA CON 2 ARGUMENTOS ---
+        print("🤖 Enviando código + estructura a Gemini...")
+        ai_comment = get_ai_review(diff_text, structure_str) # <--- OJO AQUÍ
 
-        # 5. Publicar el comentario
         print("✍️ Publicando en GitHub...")
-        pr.create_issue_comment(f"## 🤖 Revisión Automática de Código\n\n{ai_comment}")
+        pr.create_issue_comment(f"## 🤖 Revisión con Contexto Arquitectónico\n\n{ai_comment}")
         print(f"✅ ¡Listo! Comentario publicado en PR #{pr_number}")
 
     except Exception as e:

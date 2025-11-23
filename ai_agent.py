@@ -14,32 +14,38 @@ genai.configure(api_key=API_KEY)
 # Usamos el modelo Flash porque es rápido y barato (ideal para bots)
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-def get_ai_review(diff_content):
+def get_ai_review(diff_content, file_structure):
     """
-    Envía el diff a Gemini y retorna la revisión.
+    Envía el diff y la estructura del proyecto a Gemini.
     """
     
-    # --- PROMPT ENGINEERING ---
-    # Aquí definimos la personalidad y las reglas del bot.
     prompt = f"""
-    Actúa como un Ingeniero de Software Senior experto en seguridad y buenas prácticas (Python).
+    Actúa como un Ingeniero de Software Senior y Arquitecto de Software.
     
-    Tu tarea es revisar el siguiente 'git diff' de un Pull Request.
+    CONTEXTO DEL PROYECTO:
+    Estás revisando un Pull Request en un repositorio que tiene la siguiente estructura de archivos (esto te ayudará a entender las importaciones y la arquitectura):
     
-    Reglas:
-    1. Busca bugs potenciales, problemas de seguridad (claves expuestas, inyecciones) y mala optimización.
-    2. Sé constructivo pero directo.
-    3. Ignora temas triviales como espacios en blanco o falta de comentarios obvios.
-    4. Si el código parece seguro, responde "LGTM" (Looks Good To Me).
-    5. Usa formato Markdown para tu respuesta.
+    ```text
+    {file_structure}
+    ```
     
-    Código a revisar:
+    TU TAREA:
+    Revisa el siguiente 'git diff'.
+    
+    CÓDIGO A REVISAR:
     ```diff
     {diff_content}
     ```
+    
+    REGLAS DE REVISIÓN:
+    1. Prioridad ALTA: Busca vulnerabilidades de seguridad (inyecciones, secretos expuestos).
+    2. Prioridad MEDIA: Busca bugs lógicos y errores de sintaxis.
+    3. Prioridad BAJA: Sugiere mejoras de rendimiento o arquitectura basada en la estructura que ves.
+    4. Sé conciso. Si ves un archivo 'utils.py' en la estructura y el código lo importa, asume que es correcto, no alucines errores de importación.
+    5. Responde en Markdown. Si todo está bien, responde "LGTM 🚀".
     """
     
-    print("🤖 Consultando a Gemini...")
+    print("🤖 Consultando a Gemini con contexto estructural...")
     try:
         response = model.generate_content(prompt)
         return response.text
